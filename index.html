@@ -431,6 +431,8 @@ select{background:#ffffff;color:#111827}
         <button type="button" id="signUpBtn" data-i18n="signup">회원가입</button>
         <button type="button" id="signInBtn" class="buy-btn" data-i18n="login">로그인</button>
         <button type="button" id="signOutBtn" data-i18n="logout">로그아웃</button>
+        <button type="button" id="forgotPasswordBtn" data-i18n="forgot_password">비밀번호를 잊으셨나요?</button>
+        <button type="button" id="changePasswordBtn" data-i18n="change_password">비밀번호 변경</button>
       </div>
       <div id="authStatus" class="logic-hint" aria-live="polite">이메일과 비밀번호로 회원가입하거나 로그인해줘.</div>
     </section>
@@ -536,7 +538,7 @@ const I18N = {
     nav_arena:'⚔️ 투기장', nav_online:'🟢 온라인', nav_ranking:'🏆 랭킹',
     nav_market:'마켓', nav_login:'로그인',
     profile:'프로필', game:'게임', noguess:'추측없이 모드', market:'마켓',
-    login:'로그인', signup:'회원가입', logout:'로그아웃', new_game:'새 게임',
+    login:'로그인', signup:'회원가입', logout:'로그아웃', forgot_password:'비밀번호를 잊으셨나요?', change_password:'비밀번호 변경', new_game:'새 게임',
     beginner:'초급', intermediate:'중급', expert:'고급',
     find_safe:'안전칸 찾기', find_mine:'지뢰칸 찾기', explain:'왜 그런지 설명',
     arena_start:'투기장 시작', online_players:'온라인 플레이어', playing:'플레이 중',
@@ -598,7 +600,7 @@ const I18N = {
     nav_arena:'⚔️ Arena', nav_online:'🟢 Online', nav_ranking:'🏆 Ranking',
     nav_market:'Market', nav_login:'Login',
     profile:'Profile', game:'Game', noguess:'No-Guess Mode', market:'Market',
-    login:'Login', signup:'Sign Up', logout:'Log Out', new_game:'New Game',
+    login:'Login', signup:'Sign Up', logout:'Log Out', forgot_password:'Forgot password?', change_password:'Change Password', new_game:'New Game',
     beginner:'Beginner', intermediate:'Intermediate', expert:'Expert',
     find_safe:'Find Safe Cell', find_mine:'Find Mine', explain:'Explain Why',
     arena_start:'Start Arena', online_players:'Online Players', playing:'Playing',
@@ -1263,6 +1265,22 @@ document.getElementById('signInBtn').addEventListener('click',async()=>{
   setAuthStatus('로그인 완료!',true);
 });
 document.getElementById('signOutBtn').addEventListener('click',async()=>{if(sb)await sb.auth.signOut();currentUser=null;updateAccountMini();setAuthStatus('로그아웃했어.');});
+
+document.getElementById('forgotPasswordBtn').addEventListener('click',async()=>{
+  if(!sb){setAuthStatus('먼저 Supabase를 연결해줘.');return}
+  const email=(document.getElementById('authEmail').value.trim() || currentUser?.email || '');
+  if(!email){setAuthStatus(currentLang==='en'?'Enter the email address used for your account first.':'가입할 때 사용한 이메일을 먼저 입력해줘.');return}
+  setAuthStatus(currentLang==='en'?'Sending password reset email...':'비밀번호 재설정 이메일을 보내는 중...');
+  const {error}=await sb.auth.resetPasswordForEmail(email,{
+    redirectTo:'https://jihoonohprograming.github.io/minesweeper/password.html'
+  });
+  if(error){setAuthStatus((currentLang==='en'?'Failed to send reset email: ':'재설정 이메일 전송 실패: ')+error.message);return}
+  setAuthStatus(currentLang==='en'?'✅ Password reset email sent. Check your inbox and spam folder.':'✅ 비밀번호 재설정 이메일을 보냈어. 받은편지함과 스팸함을 확인해줘.',true);
+});
+
+document.getElementById('changePasswordBtn').addEventListener('click',()=>{
+  window.location.href='./password.html';
+});
 
 navItems.forEach(btn=>{
   btn.addEventListener('click',()=>{
