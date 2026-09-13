@@ -2,6 +2,7 @@
 'use strict';
 let bypass=false,pendingRestore=null,normalizing=false;
 const tx=(ko,en)=>{try{return currentLang==='en'?en:ko}catch(_){return ko}};
+const LEGACY_WEIGHTS=[50,30,10,4,2,1,1,2];
 function activeLevel(){const b=document.querySelector('.arena-level-btn.active');const n=Number(b?.dataset?.level||1);return n>=1&&n<=8?n:1}
 function status(msg){const s=document.getElementById('arenaStatus');if(s)s.textContent=msg}
 function sumCounts(c){let n=0;for(let i=1;i<=8;i++)n+=Number(c?.[i]||0);return n}
@@ -15,23 +16,35 @@ async function dbCounts(){
 }
 async function totalGenericTickets(){
   try{
-    if(typeof getTradeAssets==='function')return Number(getTradeAssets()?.ticket||0);
+    if(typeof getTradeAssets==='function'){
+      const a=await getTradeAssets();
+      if(a&&a.ticket!=null)return Number(a.ticket||0);
+    }
   }catch(_){ }
   try{
     const {data}=await sb.from('wallets').select('ticket').eq('user_id',currentUser.id).maybeSingle();
     return Number(data?.ticket||0);
   }catch(_){return 0}
 }
+function splitByRatio(total){
+  total=Math.max(0,Math.floor(Number(total)||0));
+  const raw=LEGACY_WEIGHTS.map(w=>total*w/100);
+  const out=raw.map(Math.floor);
+  let remain=total-out.reduce((a,b)=>a+b,0);
+  const order=raw.map((v,i)=>({i,f:v-Math.floor(v)})).sort((a,b)=>b.f-a.f||a.i-b.i);
+  for(let i=0;i<remain;i++)out[order[i].i]++;
+  return out;
+}
 async function normalizeExistingTickets(){
-  if(normalizing||!window.rollArenaTicketLevel)return;
+  if(normalizing)return;
   try{
     if(!sb||!currentUser)return;
     normalizing=true;
     const counts=await dbCounts(),total=await totalGenericTickets();
     const missing=Math.max(0,total-sumCounts(counts));
     if(!missing)return;
-    const next={};for(let i=1;i<=8;i++)next[i]=Number(counts?.[i]||0);
-    for(let i=0;i<missing;i++)next[window.rollArenaTicketLevel()]++;
+    const add=splitByRatio(missing),next={};
+    for(let i=1;i<=8;i++)next[i]=Number(counts?.[i]||0)+add[i-1];
     const row={user_id:currentUser.id,updated_at:new Date().toISOString()};
     for(let i=1;i<=8;i++)row['l'+i]=next[i];
     const {error}=await sb.from('arena_ticket_levels').upsert(row,{onConflict:'user_id'});
@@ -39,8 +52,8 @@ async function normalizeExistingTickets(){
     try{localStorage.setItem('arenaTicketLevelCounts',JSON.stringify(next))}catch(_){ }
     window.dispatchEvent(new CustomEvent('arena-ticket-levels-changed',{detail:{converted:missing}}));
     await refreshLevelLabels();
-    status(tx(`🎟️ 기존 투기장 티켓 ${missing}개를 레벨별 티켓으로 변환했어.`,`🎟️ Converted ${missing} existing Arena Tickets into level tickets.`));
-  }catch(_){ }finally{normalizing=false}
+    status(tx(`🎟️ 기존 투기장 티켓 ${missing.toLocaleString()}개를 레벨별 티켓으로 한 번에 변환했어.`,`🎟️ Converted ${missing.toLocaleString()} existing Arena Tickets into level tickets.`));
+  }catch(e){console.warn('Arena ticket conversion failed',e)}finally{normalizing=false}
 }
 async function setLevelCount(level,next){
   const col='l'+level;
@@ -79,9 +92,8 @@ async function refreshLevelLabels(){
   const c=await dbCounts();
   document.querySelectorAll('.arena-level-btn').forEach(b=>{
     const lv=Number(b.dataset.level||0);if(!lv)return;
-    let base=b.dataset.baseLabel;
-    if(!base){base=(b.textContent||'').replace(/\s*·\s*보유\s*\d+개.*$/,'').replace(/\s*·\s*Owned\s*\d+.*$/,'');b.dataset.baseLabel=base}
-    b.textContent=`${base} · ${tx('보유','Owned')} ${Number(c[lv]||0)}${tx('개','')}`;
+    const base=(b.textContent||'').replace(/\s*·\s*보유\s*[\d,]+개.*$/,'').replace(/\s*·\s*Owned\s*[\d,]+.*$/,'');
+    b.textContent=`${base} · ${tx('보유','Owned')} ${Number(c[lv]||0).toLocaleString()}${tx('개','')}`;
   });
 }
 function installEntryGuard(){
