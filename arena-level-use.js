@@ -1,0 +1,102 @@
+(()=>{
+'use strict';
+let bypass=false,pendingRestore=null,normalizing=false;
+const tx=(ko,en)=>{try{return currentLang==='en'?en:ko}catch(_){return ko}};
+function activeLevel(){const b=document.querySelector('.arena-level-btn.active');const n=Number(b?.dataset?.level||1);return n>=1&&n<=8?n:1}
+function status(msg){const s=document.getElementById('arenaStatus');if(s)s.textContent=msg}
+function sumCounts(c){let n=0;for(let i=1;i<=8;i++)n+=Number(c?.[i]||0);return n}
+async function dbCounts(){
+  try{
+    if(window.fetchArenaTicketLevelCounts)return await window.fetchArenaTicketLevelCounts();
+    if(!sb||!currentUser)return{};
+    const {data}=await sb.from('arena_ticket_levels').select('l1,l2,l3,l4,l5,l6,l7,l8').eq('user_id',currentUser.id).maybeSingle();
+    const o={};for(let i=1;i<=8;i++)o[i]=Number(data?.['l'+i]||0);return o;
+  }catch(_){return{}}
+}
+async function totalGenericTickets(){
+  try{
+    if(typeof getTradeAssets==='function')return Number(getTradeAssets()?.ticket||0);
+  }catch(_){ }
+  try{
+    const {data}=await sb.from('wallets').select('ticket').eq('user_id',currentUser.id).maybeSingle();
+    return Number(data?.ticket||0);
+  }catch(_){return 0}
+}
+async function normalizeExistingTickets(){
+  if(normalizing||!window.rollArenaTicketLevel)return;
+  try{
+    if(!sb||!currentUser)return;
+    normalizing=true;
+    const counts=await dbCounts(),total=await totalGenericTickets();
+    let missing=Math.max(0,total-sumCounts(counts));
+    if(missing>200)missing=200;
+    for(let i=0;i<missing;i++){
+      const lv=window.rollArenaTicketLevel();
+      const {error}=await sb.rpc('record_arena_ticket_level',{p_level:lv});
+      if(error)break;
+    }
+    if(missing)await refreshLevelLabels();
+  }catch(_){ }finally{normalizing=false}
+}
+async function setLevelCount(level,next){
+  const col='l'+level;
+  const {data,error}=await sb.from('arena_ticket_levels').update({[col]:next,updated_at:new Date().toISOString()}).eq('user_id',currentUser.id).select('user_id').maybeSingle();
+  return !error&&!!data;
+}
+async function consume(level){
+  const c=await dbCounts(),now=Number(c[level]||0);
+  if(now<1)return false;
+  const ok=await setLevelCount(level,now-1);
+  if(ok){pendingRestore={level,count:now};await refreshLevelLabels()}
+  return ok;
+}
+async function restorePending(){
+  const p=pendingRestore;if(!p||!sb||!currentUser)return;
+  pendingRestore=null;
+  const c=await dbCounts();
+  await setLevelCount(p.level,Number(c[p.level]||0)+1);
+  await refreshLevelLabels();
+}
+function wrapArenaEnter(){
+  try{
+    if(!sb||!sb.rpc||sb.__levelEntryWrapped)return;
+    const old=sb.rpc.bind(sb);
+    sb.rpc=async function(name,args,opts){
+      const r=await old(name,args,opts);
+      if(name==='arena_enter'&&pendingRestore){
+        if(r?.error)await restorePending();else{pendingRestore=null;refreshLevelLabels()}
+      }
+      return r;
+    };
+    sb.__levelEntryWrapped=true;
+  }catch(_){ }
+}
+async function refreshLevelLabels(){
+  const c=await dbCounts();
+  document.querySelectorAll('.arena-level-btn').forEach(b=>{
+    const lv=Number(b.dataset.level||0);if(!lv)return;
+    let base=b.dataset.baseLabel;
+    if(!base){base=(b.textContent||'').replace(/\s*·\s*보유\s*\d+개.*$/,'').replace(/\s*·\s*Owned\s*\d+.*$/,'');b.dataset.baseLabel=base}
+    b.textContent=`${base} · ${tx('보유','Owned')} ${Number(c[lv]||0)}${tx('개','')}`;
+  });
+}
+function installEntryGuard(){
+  const btn=document.getElementById('arenaStartBtn');if(!btn||btn.dataset.levelGuard)return;
+  btn.dataset.levelGuard='1';
+  btn.addEventListener('click',async e=>{
+    if(bypass)return;
+    e.preventDefault();e.stopImmediatePropagation();
+    try{
+      if(!sb||!currentUser){status(tx('로그인 후 투기장을 시작할 수 있어.','Log in to start the Arena.'));return}
+      const lv=activeLevel();
+      const ok=await consume(lv);
+      if(!ok){status(tx(`🎟️ ${lv}레벨 투기장 티켓이 없어.`,`🎟️ You do not have a Level ${lv} Arena Ticket.`));return}
+      bypass=true;btn.click();bypass=false;
+    }catch(err){await restorePending();status(tx(`입장 실패: ${err?.message||err}`,`Entry failed: ${err?.message||err}`))}
+  },true);
+}
+function boot(){wrapArenaEnter();installEntryGuard();refreshLevelLabels();normalizeExistingTickets()}
+window.addEventListener('arena-ticket-levels-changed',()=>refreshLevelLabels());
+document.addEventListener('click',e=>{if(e.target?.classList?.contains('arena-level-btn'))setTimeout(refreshLevelLabels,0)});
+setTimeout(boot,400);setTimeout(boot,1200);setInterval(()=>{if(document.getElementById('arenaView')?.classList.contains('active'))refreshLevelLabels()},3000);
+})();
