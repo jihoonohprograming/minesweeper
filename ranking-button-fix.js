@@ -1,0 +1,1 @@
+(()=>{const old=document.getElementById('refreshRankingBtn');if(!old)return;const b=old.cloneNode(true);old.replaceWith(b);b.addEventListener('click',()=>{try{refreshRanking()}catch(_){}})})();
