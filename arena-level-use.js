@@ -3,26 +3,29 @@
 let bypass=false,pendingRestore=null,normalizing=false;
 const tx=(ko,en)=>{try{return currentLang==='en'?en:ko}catch(_){return ko}};
 const LEGACY_WEIGHTS=[50,30,10,4,2,1,1,2];
+const db=()=>window.sb||null;
+const user=()=>window.currentUser||null;
 function activeLevel(){const b=document.querySelector('.arena-level-btn.active');const n=Number(b?.dataset?.level||1);return n>=1&&n<=8?n:1}
 function status(msg){const s=document.getElementById('arenaStatus');if(s)s.textContent=msg}
 function sumCounts(c){let n=0;for(let i=1;i<=8;i++)n+=Number(c?.[i]||0);return n}
 async function dbCounts(){
   try{
     if(window.fetchArenaTicketLevelCounts)return await window.fetchArenaTicketLevelCounts();
-    if(!sb||!currentUser)return{};
-    const {data}=await sb.from('arena_ticket_levels').select('l1,l2,l3,l4,l5,l6,l7,l8').eq('user_id',currentUser.id).maybeSingle();
+    const s=db(),u=user();if(!s||!u)return{};
+    const {data}=await s.from('arena_ticket_levels').select('l1,l2,l3,l4,l5,l6,l7,l8').eq('user_id',u.id).maybeSingle();
     const o={};for(let i=1;i<=8;i++)o[i]=Number(data?.['l'+i]||0);return o;
   }catch(_){return{}}
 }
 async function totalGenericTickets(){
   try{
-    if(typeof getTradeAssets==='function'){
-      const a=await getTradeAssets();
+    if(typeof window.getTradeAssets==='function'){
+      const a=await window.getTradeAssets();
       if(a&&a.ticket!=null)return Number(a.ticket||0);
     }
   }catch(_){ }
   try{
-    const {data}=await sb.from('wallets').select('ticket').eq('user_id',currentUser.id).maybeSingle();
+    const s=db(),u=user();if(!s||!u)return 0;
+    const {data}=await s.from('wallets').select('ticket').eq('user_id',u.id).maybeSingle();
     return Number(data?.ticket||0);
   }catch(_){return 0}
 }
@@ -38,26 +41,24 @@ function splitByRatio(total){
 async function normalizeExistingTickets(){
   if(normalizing)return;
   try{
-    if(!sb||!currentUser)return;
+    const s=db(),u=user();if(!s||!u)return;
     normalizing=true;
     const counts=await dbCounts(),total=await totalGenericTickets();
-    const missing=Math.max(0,total-sumCounts(counts));
-    if(!missing)return;
-    const add=splitByRatio(missing),next={};
-    for(let i=1;i<=8;i++)next[i]=Number(counts?.[i]||0)+add[i-1];
-    const row={user_id:currentUser.id,updated_at:new Date().toISOString()};
+    const nextArr=splitByRatio(total),next={};
+    for(let i=1;i<=8;i++)next[i]=nextArr[i-1];
+    const row={user_id:u.id,updated_at:new Date().toISOString()};
     for(let i=1;i<=8;i++)row['l'+i]=next[i];
-    const {error}=await sb.from('arena_ticket_levels').upsert(row,{onConflict:'user_id'});
+    const {error}=await s.from('arena_ticket_levels').upsert(row,{onConflict:'user_id'});
     if(error)throw error;
     try{localStorage.setItem('arenaTicketLevelCounts',JSON.stringify(next))}catch(_){ }
-    window.dispatchEvent(new CustomEvent('arena-ticket-levels-changed',{detail:{converted:missing}}));
+    window.dispatchEvent(new CustomEvent('arena-ticket-levels-changed',{detail:{converted:total}}));
     await refreshLevelLabels();
-    status(tx(`🎟️ 기존 투기장 티켓 ${missing.toLocaleString()}개를 레벨별 티켓으로 한 번에 변환했어.`,`🎟️ Converted ${missing.toLocaleString()} existing Arena Tickets into level tickets.`));
   }catch(e){console.warn('Arena ticket conversion failed',e)}finally{normalizing=false}
 }
 async function setLevelCount(level,next){
+  const s=db(),u=user();if(!s||!u)return false;
   const col='l'+level;
-  const {data,error}=await sb.from('arena_ticket_levels').update({[col]:next,updated_at:new Date().toISOString()}).eq('user_id',currentUser.id).select('user_id').maybeSingle();
+  const {data,error}=await s.from('arena_ticket_levels').update({[col]:next,updated_at:new Date().toISOString()}).eq('user_id',u.id).select('user_id').maybeSingle();
   return !error&&!!data;
 }
 async function consume(level){
@@ -68,7 +69,7 @@ async function consume(level){
   return ok;
 }
 async function restorePending(){
-  const p=pendingRestore;if(!p||!sb||!currentUser)return;
+  const p=pendingRestore,s=db(),u=user();if(!p||!s||!u)return;
   pendingRestore=null;
   const c=await dbCounts();
   await setLevelCount(p.level,Number(c[p.level]||0)+1);
@@ -76,16 +77,16 @@ async function restorePending(){
 }
 function wrapArenaEnter(){
   try{
-    if(!sb||!sb.rpc||sb.__levelEntryWrapped)return;
-    const old=sb.rpc.bind(sb);
-    sb.rpc=async function(name,args,opts){
+    const s=db();if(!s||!s.rpc||s.__levelEntryWrapped)return;
+    const old=s.rpc.bind(s);
+    s.rpc=async function(name,args,opts){
       const r=await old(name,args,opts);
       if(name==='arena_enter'&&pendingRestore){
         if(r?.error)await restorePending();else{pendingRestore=null;refreshLevelLabels()}
       }
       return r;
     };
-    sb.__levelEntryWrapped=true;
+    s.__levelEntryWrapped=true;
   }catch(_){ }
 }
 async function refreshLevelLabels(){
@@ -103,7 +104,7 @@ function installEntryGuard(){
     if(bypass)return;
     e.preventDefault();e.stopImmediatePropagation();
     try{
-      if(!sb||!currentUser){status(tx('로그인 후 투기장을 시작할 수 있어.','Log in to start the Arena.'));return}
+      if(!db()||!user()){status(tx('로그인 후 투기장을 시작할 수 있어.','Log in to start the Arena.'));return}
       const lv=activeLevel();
       const ok=await consume(lv);
       if(!ok){status(tx(`🎟️ ${lv}레벨 투기장 티켓이 없어.`,`🎟️ You do not have a Level ${lv} Arena Ticket.`));return}
@@ -114,5 +115,5 @@ function installEntryGuard(){
 function boot(){wrapArenaEnter();installEntryGuard();refreshLevelLabels();normalizeExistingTickets()}
 window.addEventListener('arena-ticket-levels-changed',()=>refreshLevelLabels());
 document.addEventListener('click',e=>{if(e.target?.classList?.contains('arena-level-btn'))setTimeout(refreshLevelLabels,0)});
-setTimeout(boot,400);setTimeout(boot,1200);setInterval(()=>{if(document.getElementById('arenaView')?.classList.contains('active')){refreshLevelLabels();normalizeExistingTickets()}},3000);
+setTimeout(boot,400);setTimeout(boot,1200);setInterval(()=>{if(document.getElementById('arenaView')?.classList.contains('active'))refreshLevelLabels()},3000);
 })();
