@@ -8,8 +8,7 @@ function suite(){try{return JSON.parse(localStorage.getItem(SUITE)||'{}')||{}}ca
 function saveSuite(s){localStorage.setItem(SUITE,JSON.stringify(s));window.dispatchEvent(new CustomEvent('mso-state-changed'))}
 function db(){try{return window.__msGetSb?.()||window.sb||null}catch(_){return window.sb||null}}
 function user(){try{return window.__msGetUser?.()||window.currentUser||null}catch(_){return window.currentUser||null}}
-async function coins(){const d=db(),u=user();if(!d||!u)throw Error('로그인이 필요해.');const {data,error}=await d.from('wallets').select('coins').eq('user_id',u.id).maybeSingle();if(error)throw error;return Number(data?.coins||0)}
-async function pay(n){const d=db(),u=user(),c=await coins();if(c<n)throw Error(`코인이 부족해. 필요 ${n.toLocaleString()}코인`);const {error}=await d.from('wallets').update({coins:c-n}).eq('user_id',u.id);if(error)throw error}
+async function pay(n){const d=db(),u=user();if(!d||!u)throw Error('로그인이 필요해.');const {data,error}=await d.rpc('spend_coins',{p_amount:Math.max(0,Math.floor(Number(n)||0))});if(error)throw error;if(data===false)throw Error(`코인이 부족해. 필요 ${Number(n).toLocaleString()}코인`);return data}
 function gemName(k){return GEMS.find(x=>x[0]===k)?.[1]||k}
 function gemIcon(k){return GEMS.find(x=>x[0]===k)?.[2]||'💎'}
 function takeGem(k){const s=suite();s.gems??={};if(Number(s.gems[k]||0)<1)throw Error(`${gemName(k)}가 필요해.`);s.gems[k]--;saveSuite(s)}
