@@ -5,14 +5,14 @@
 <script>
 (async()=>{
   try{
-    const r=await fetch('./app.html?v=20260913-suite14',{cache:'no-store'});
+    const r=await fetch('./app.html?v=20260913-suite15',{cache:'no-store'});
     if(!r.ok) throw new Error('app.html '+r.status);
     let h=await r.text();
     h=h.replace("let sb=null,currentUser=null,onlineReady=false,onlineUsername='';","let sb=null,currentUser=null,onlineReady=false,onlineUsername='';window.__msGetSb=()=>sb;window.__msGetUser=()=>currentUser;");
     h=h.replace("sb=mod.createClient(cfg.url,cfg.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});","sb=mod.createClient(cfg.url,cfg.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});window.sb=sb;");
     h=h.replace("currentUser=data.session?.user||null;","currentUser=data.session?.user||null;window.currentUser=currentUser;");
     h=h.replace("currentUser=session?.user||null;if(!currentUser)","currentUser=session?.user||null;window.currentUser=currentUser;if(!currentUser)");
-    h=h.replace(/<\/body>/i,'<script src="./arena-v2.js?v=20260913-suite14"><\/script><script src="./arena-ticket-levels.js?v=20260913-suite14"><\/script><script src="./site-upgrades.js?v=20260913-suite14"><\/script><script src="./arena-level-use.js?v=20260913-suite14"><\/script><script src="./equipment-v2.js?v=20260913-suite14"><\/script><script src="./equipment-economy.js?v=20260913-suite14"><\/script><script src="./number-ticket-guard.js?v=20260913-suite14"><\/script><script src="./ticket-ratio-migration.js?v=20260913-suite14"><\/script><script src="./ranking-button-fix.js?v=20260913-suite14"><\/script><script src="./mso-suite.js?v=20260913-suite14"><\/script><script src="./extreme-pvp.js?v=20260913-suite14"><\/script></body>');
+    h=h.replace(/<\/body>/i,'<script src="./arena-v2.js?v=20260913-suite15"><\/script><script src="./arena-ticket-levels.js?v=20260913-suite15"><\/script><script src="./site-upgrades.js?v=20260913-suite15"><\/script><script src="./arena-level-use.js?v=20260913-suite15"><\/script><script src="./equipment-v2.js?v=20260913-suite15"><\/script><script src="./equipment-economy.js?v=20260913-suite15"><\/script><script src="./number-ticket-guard.js?v=20260913-suite15"><\/script><script src="./ticket-ratio-migration.js?v=20260913-suite15"><\/script><script src="./ranking-button-fix.js?v=20260913-suite15"><\/script><script src="./mso-suite.js?v=20260913-suite15"><\/script><script src="./extreme-pvp.js?v=20260913-suite15"><\/script><script src="./emerald-quantity-fix.js?v=20260913-suite15"><\/script></body>');
     document.open();document.write(h);document.close();
   }catch(e){document.body.innerHTML='<p style="font-family:sans-serif;padding:24px">사이트를 불러오지 못했습니다: '+String(e.message||e)+'</p>'}
 })();
