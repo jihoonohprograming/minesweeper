@@ -2,7 +2,12 @@
 'use strict';
 const KEY='msSuiteV3';
 let lastText='';
-function bonus(){try{return Math.max(0,Number((window.getEquipmentBonuses?.()||{}).emerald||0))}catch(_){return 0}}
+function bonus(){
+  try{
+    const b=window.getEquipmentBonuses?.()||{};
+    return Math.max(0,Number(b.gem||0)+Number(b.emerald||0));
+  }catch(_){return 0}
+}
 function qty(){return Math.max(1,Math.floor(bonus()/100))}
 function apply(){
   const e=document.getElementById('xpvpResultReward');
