@@ -21,8 +21,16 @@ const STAT_POOL=[
  {id:'arenaCoin',name:'투기장 동전',min:5,max:30},
  {id:'activity',name:'활동 점수',min:5,max:30},
  {id:'event',name:'이벤트 자원',min:5,max:35},
+ {id:'ruby',name:'루비',min:8,max:40},
+ {id:'sapphire',name:'사파이어',min:8,max:40},
+ {id:'topaz',name:'토파즈',min:8,max:40},
+ {id:'amethyst',name:'자수정',min:8,max:40},
+ {id:'onyx',name:'오닉스',min:8,max:40},
+ {id:'aquamarine',name:'아쿠아마린',min:8,max:40},
  {id:'emerald',name:'에메랄드',min:8,max:40},
- {id:'ruby',name:'루비',min:4,max:20}
+ {id:'garnet',name:'가넷',min:8,max:40},
+ {id:'jade',name:'제이드',min:8,max:40},
+ {id:'diamond',name:'다이아몬드',min:4,max:25}
 ];
 const DEFAULTS=[
  {id:'starter-engine',slot:'engine',rarity:'특별',code:'UE-59A88-E5',quality:46,boostDays:10,stats:{xp:10,coin:18,gem:22,ticket:16,emerald:40},equipped:true},
@@ -41,13 +49,13 @@ function pickRarity(){let r=Math.random()*100;for(const x of RARITIES){if(r<x.w)
 function rnd(a,b){return Math.floor(a+Math.random()*(b-a+1))}
 function codeFor(slot,rarity){const s=slotInfo(slot),letters='ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';const rand=n=>Array.from({length:n},()=>letters[Math.floor(Math.random()*letters.length)]).join('');return `${s.prefix}-${rand(5)}-${rarity==='전설'?'R1':rarity==='특별'?'E5':rarity==='희귀'?'B3':'C1'}`}
 function craft(slot){const r=pickRarity(),quality=rnd(r.min,r.max),count=r.name==='전설'?6:r.name==='특별'?5:r.name==='희귀'?4:3,pool=[...STAT_POOL].sort(()=>Math.random()-.5).slice(0,count),stats={};for(const s of pool){const base=rnd(s.min,s.max),q=.7+quality/200;stats[s.id]=Math.max(1,Math.round(base*r.m*q))}return{id:'eq-'+Date.now()+'-'+Math.random().toString(36).slice(2,7),slot,rarity:r.name,code:codeFor(slot,r.name),quality,boostDays:rnd(5,20),stats,equipped:false}}
-function bonuses(){const b={xp:0,coin:0,gem:0,ticket:0,arenaCoin:0,activity:0,event:0,emerald:0,ruby:0};for(const it of load().filter(x=>x.equipped)){for(const [k,v] of Object.entries(it.stats||{}))b[k]=(b[k]||0)+Number(v||0)}return b}
+function bonuses(){const b={xp:0,coin:0,gem:0,ticket:0,arenaCoin:0,activity:0,event:0,ruby:0,sapphire:0,topaz:0,amethyst:0,onyx:0,aquamarine:0,emerald:0,garnet:0,jade:0,diamond:0};for(const it of load().filter(x=>x.equipped)){for(const [k,v] of Object.entries(it.stats||{}))b[k]=(b[k]||0)+Number(v||0)}return b}
 window.getEquipmentBonuses=bonuses;
 function percentText(k,v){return `${STAT_POOL.find(x=>x.id===k)?.name||k}: +${v}%`}
 function equip(id){const a=load(),it=a.find(x=>x.id===id);if(!it)return;a.forEach(x=>{if(x.slot===it.slot)x.equipped=false});it.equipped=true;save(a);render()}
 function unequip(id){const a=load(),it=a.find(x=>x.id===id);if(it)it.equipped=false;save(a);render()}
 function removeItem(id){const a=load().filter(x=>x.id!==id);save(a);render()}
-function upgrade(id){const a=load(),it=a.find(x=>x.id===id);if(!it)return;it.quality=Math.min(100,Number(it.quality||0)+rnd(1,4));for(const k of Object.keys(it.stats||{}))if(Math.random()<.45)it.stats[k]=Number(it.stats[k]||0)+1;save(a);render()}
+function upgrade(id){const a=load(),it=a.find(x=>x.id===id);if(!it)return;it.quality=Number(it.quality||0)+rnd(1,4);for(const k of Object.keys(it.stats||{}))if(Math.random()<.45)it.stats[k]=Number(it.stats[k]||0)+1;save(a);render()}
 function view(){return document.getElementById('equipmentView')}
 function render(){const v=view();if(!v)return;const items=load(),b=bonuses();v.innerHTML=`
  <div class="eq-head"><div><h2>🧰 장비</h2><p class="mode-desc">장비를 직접 제작하고, 슬롯별로 하나씩 장착할 수 있어.</p></div><div class="eq-total">장착 ${items.filter(x=>x.equipped).length}/5</div></div>
@@ -66,7 +74,7 @@ function render(){const v=view();if(!v)return;const items=load(),b=bonuses();v.i
  if(!items.length)inv.innerHTML='<div class="empty-note">보유 장비가 없어. 위에서 하나 제작해 봐!</div>';else items.forEach(it=>draw(it,inv));
 }
 function extraCalls(percent){const p=Math.max(0,Number(percent||0)),whole=Math.floor(p/100),rem=p%100;return whole+(Math.random()*100<rem?1:0)}
-function installEffects(){try{if(!sb?.rpc||sb.__equipmentEffectsV3)return;const old=sb.rpc.bind(sb);sb.rpc=async function(name,args,opts){
+function installEffects(){try{const sb=window.__msGetSb?.()||window.sb;if(!sb?.rpc||sb.__equipmentEffectsV3)return;const old=sb.rpc.bind(sb);sb.rpc=async function(name,args,opts){
   if(name==='normal_cell_reward'||name==='arena_cell_reward'){
     let res=await old(name,args,opts);if(res?.error||res?.data?.ticket_awarded)return res;const n=extraCalls(bonuses().ticket);for(let i=0;i<n;i++){const x=await old(name,args,opts);if(x?.error)return res;if(x?.data?.ticket_awarded)return x}return res;
   }
