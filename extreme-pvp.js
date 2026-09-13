@@ -6,7 +6,9 @@ let match=null,aiTimer=null;
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(_){return{}}}
 function save(s){localStorage.setItem(KEY,JSON.stringify(s));window.dispatchEvent(new CustomEvent('mso-state-changed'))}
 function state(){const s=load();s.lp=Number(s.lp||0);s.mmr=Number(s.mmr||1000);s.pvp??={wins:0,losses:0};s.pvpExtreme??={wins:0,losses:0};s.gems??={};return s}
-function emeraldChance(){let bonus=0;try{bonus=Number((window.getEquipmentBonuses?.()||{}).emerald||0)}catch(_){}return Math.min(100,10*(1+bonus/100))}
+function emeraldBonus(){try{const b=window.getEquipmentBonuses?.()||{};return Math.max(0,Number(b.gem||0)+Number(b.emerald||0))}catch(_){return 0}}
+function emeraldChance(){return Math.min(100,10*(1+emeraldBonus()/100))}
+function emeraldQty(){return Math.max(1,Math.floor(emeraldBonus()/100))}
 
 const css=document.createElement('style');
 css.textContent=`
@@ -65,7 +67,18 @@ function attack(who,n,target){if(match.mode!=='extreme')return;const k=who==='me
 function playerOpen(i){if(!match||match.ended)return;const x=match.me[i];if(!x||x.open)return;if(x.extra){x.open=true;attack('me',1,match.op);update();checkWin();return}if(match.meFirst){makeFirstSafe(match.me,i);match.meFirst=false}if(match.me[i].mine){explodeNine(match.me,i);feed('💥 지뢰! 누른 칸 주변 3×3만 터졌어.');update();checkWin();return}const n=flood(match.me,i);attack('me',n,match.op);update();checkWin()}
 function aiMove(){if(!match||match.ended)return;const extras=match.op.filter(x=>x.extra&&!x.open);if(extras.length){extras[0].open=true;attack('op',1,match.me);update();checkWin();return}const a=match.op.slice(0,81).filter(x=>!x.mine&&!x.open);if(!a.length){checkWin();return}const x=a[Math.floor(Math.random()*a.length)];if(match.opFirst){makeFirstSafe(match.op,x.i);match.opFirst=false}const n=flood(match.op,x.i);attack('op',Math.min(n,3),match.me);update();checkWin()}
 function checkWin(){if(!match||match.ended)return;if(safeLeft(match.me)===0)finish(true,'내가 먼저 모든 칸을 해결했어!');else if(safeLeft(match.op)===0)finish(false,'상대가 먼저 모든 칸을 해결했어.')}
-function finish(win,msg){match.ended=true;clearInterval(aiTimer);const s=state();let got=false;const chance=emeraldChance();if(win){s.pvp.wins++;if(match.mode==='extreme')s.pvpExtreme.wins++;s.lp+=3;s.mmr+=2;s.achievements??={};s.achievements.pvpWin=true;if(Math.random()*100<chance){s.gems.emerald=Number(s.gems.emerald||0)+1;got=true}}else{s.pvp.losses++;if(match.mode==='extreme')s.pvpExtreme.losses++;s.lp=Math.max(0,s.lp-2);s.mmr=Math.max(100,s.mmr-2)}save(s);feed(win?'🏆 승리!':'💥 패배');const box=document.getElementById('xpvpResult');if(box){box.className='xpvp-result show '+(win?'win':'loss');document.getElementById('xpvpResultTitle').textContent=win?'🏆 승리!':'💥 패배';document.getElementById('xpvpResultText').textContent=msg;document.getElementById('xpvpResultReward').textContent=win?`LP +3 · MMR +2 · 에메랄드 ${got?'+1 획득!':`미획득 (${chance.toFixed(1)}%)`}`:'LP -2 · MMR -2'}}
+function finish(win,msg){
+ match.ended=true;clearInterval(aiTimer);
+ const s=state();let got=false,gotQty=0;const chance=emeraldChance(),qty=emeraldQty();
+ if(win){
+   s.pvp.wins++;if(match.mode==='extreme')s.pvpExtreme.wins++;s.lp+=3;s.mmr+=2;s.achievements??={};s.achievements.pvpWin=true;
+   if(Math.random()*100<chance){gotQty=qty;s.gems.emerald=Number(s.gems.emerald||0)+gotQty;got=true}
+ }else{
+   s.pvp.losses++;if(match.mode==='extreme')s.pvpExtreme.losses++;s.lp=Math.max(0,s.lp-2);s.mmr=Math.max(100,s.mmr-2)
+ }
+ save(s);feed(win?'🏆 승리!':'💥 패배');
+ const box=document.getElementById('xpvpResult');if(box){box.className='xpvp-result show '+(win?'win':'loss');document.getElementById('xpvpResultTitle').textContent=win?'🏆 승리!':'💥 패배';document.getElementById('xpvpResultText').textContent=msg;document.getElementById('xpvpResultReward').textContent=win?`LP +3 · MMR +2 · 에메랄드 ${got?`+${gotQty} 획득!`:`미획득 (${chance.toFixed(1)}%)`}`:'LP -2 · MMR -2'}
+}
 
 // 버블 단계 이벤트 위임: 다른 메뉴/장비 클릭을 막지 않는다.
 document.addEventListener('click',e=>{
