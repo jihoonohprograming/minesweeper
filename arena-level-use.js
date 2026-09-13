@@ -28,14 +28,18 @@ async function normalizeExistingTickets(){
     if(!sb||!currentUser)return;
     normalizing=true;
     const counts=await dbCounts(),total=await totalGenericTickets();
-    let missing=Math.max(0,total-sumCounts(counts));
-    if(missing>200)missing=200;
-    for(let i=0;i<missing;i++){
-      const lv=window.rollArenaTicketLevel();
-      const {error}=await sb.rpc('record_arena_ticket_level',{p_level:lv});
-      if(error)break;
-    }
-    if(missing)await refreshLevelLabels();
+    const missing=Math.max(0,total-sumCounts(counts));
+    if(!missing)return;
+    const next={};for(let i=1;i<=8;i++)next[i]=Number(counts?.[i]||0);
+    for(let i=0;i<missing;i++)next[window.rollArenaTicketLevel()]++;
+    const row={user_id:currentUser.id,updated_at:new Date().toISOString()};
+    for(let i=1;i<=8;i++)row['l'+i]=next[i];
+    const {error}=await sb.from('arena_ticket_levels').upsert(row,{onConflict:'user_id'});
+    if(error)throw error;
+    try{localStorage.setItem('arenaTicketLevelCounts',JSON.stringify(next))}catch(_){ }
+    window.dispatchEvent(new CustomEvent('arena-ticket-levels-changed',{detail:{converted:missing}}));
+    await refreshLevelLabels();
+    status(tx(`🎟️ 기존 투기장 티켓 ${missing}개를 레벨별 티켓으로 변환했어.`,`🎟️ Converted ${missing} existing Arena Tickets into level tickets.`));
   }catch(_){ }finally{normalizing=false}
 }
 async function setLevelCount(level,next){
@@ -98,5 +102,5 @@ function installEntryGuard(){
 function boot(){wrapArenaEnter();installEntryGuard();refreshLevelLabels();normalizeExistingTickets()}
 window.addEventListener('arena-ticket-levels-changed',()=>refreshLevelLabels());
 document.addEventListener('click',e=>{if(e.target?.classList?.contains('arena-level-btn'))setTimeout(refreshLevelLabels,0)});
-setTimeout(boot,400);setTimeout(boot,1200);setInterval(()=>{if(document.getElementById('arenaView')?.classList.contains('active'))refreshLevelLabels()},3000);
+setTimeout(boot,400);setTimeout(boot,1200);setInterval(()=>{if(document.getElementById('arenaView')?.classList.contains('active')){refreshLevelLabels();normalizeExistingTickets()}},3000);
 })();
